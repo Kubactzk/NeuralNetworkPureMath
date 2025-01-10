@@ -3,27 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix
-
-# Generate XOR dataset
-def plot_weights(w1, w2):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    # Plot weights of the first layer
-    im1 = axes[0].imshow(w1, cmap='coolwarm', aspect='auto')
-    axes[0].set_title("Weights: Input to Hidden Layer")
-    axes[0].set_xlabel("Input Neurons")
-    axes[0].set_ylabel("Hidden Neurons")
-    fig.colorbar(im1, ax=axes[0])
-
-    # Plot weights of the second layer
-    im2 = axes[1].imshow(w2, cmap='coolwarm', aspect='auto')
-    axes[1].set_title("Weights: Hidden to Output Layer")
-    axes[1].set_xlabel("Hidden Neurons")
-    axes[1].set_ylabel("Output Neurons")
-    fig.colorbar(im2, ax=axes[1])
-
-    plt.tight_layout()
-    plt.show()
+import seaborn as sns
 
 
 def dataset():
@@ -38,9 +18,19 @@ def dataset():
     plt.xlabel("x1")
     plt.ylabel("x2")
     plt.colorbar(label="y")
-    plt.show()
+    plt.savefig("data.jpg")
+    plt.close()
+    
 
     return df
+
+# Xavier initialization
+def init_weights(input_size, hidden_size, output_size):
+    w1 = np.random.randn(hidden_size, input_size) * np.sqrt(2 / (input_size + hidden_size))
+    b1 = np.zeros((hidden_size, 1))
+    w2 = np.random.randn(output_size, hidden_size) * np.sqrt(2 / (hidden_size + output_size))
+    b2 = np.zeros((output_size, 1))
+    return w1, b1, w2, b2
 
 # Sigmoid activation function
 def sigmoid(z):
@@ -53,14 +43,6 @@ def sigmoid_derivative(a):
 # Mean Squared Error loss
 def compute_loss(y, a2):
     return np.mean((y - a2) ** 2)
-
-# Xavier initialization
-def init_weights(input_size, hidden_size, output_size):
-    w1 = np.random.randn(hidden_size, input_size) * np.sqrt(2 / (input_size + hidden_size))
-    b1 = np.zeros((hidden_size, 1))
-    w2 = np.random.randn(output_size, hidden_size) * np.sqrt(2 / (hidden_size + output_size))
-    b2 = np.zeros((output_size, 1))
-    return w1, b1, w2, b2
 
 # Forward pass
 def forward_pass(w1, b1, w2, b2, x):
@@ -101,14 +83,18 @@ def train(x, y, input_size, hidden_size, output_size, epochs=10000, lr=0.005):
     losses = []
 
     for epoch in range(epochs):
+        w1_arr.append(w1.copy())  # Copy the weights
+        w2_arr.append(w2.copy())
+
         # Forward pass
         _, a1, _, a2 = forward_pass(w1, b1, w2, b2, x)
+        
 
         # Compute loss
         loss = compute_loss(y, a2)
         losses.append(loss)
 
-        if earlyStopping(loss, 0.1):
+        if earlyStopping(loss, 0.05):
             print(f"Early stopping at epoch {epoch}, Loss: {loss:.4f}")
             break
 
@@ -118,8 +104,9 @@ def train(x, y, input_size, hidden_size, output_size, epochs=10000, lr=0.005):
         # Print loss every 1000 epochs
         if epoch % 100 == 0:
             print(f"Epoch {epoch}, Loss: {loss:.4f}")
+        
 
-    return w1, b1, w2, b2, losses
+    return w1, b1, w2, b2, losses, w1_arr, w2_arr
 
 # Model evaluation
 def evaluate_model(w1, b1, w2, b2, x, y):
@@ -128,6 +115,122 @@ def evaluate_model(w1, b1, w2, b2, x, y):
     accuracy = accuracy_score(y, predictions)
     cm = confusion_matrix(y, predictions)
     return accuracy, cm, predictions
+
+
+
+def plot_weights(w1, w2):
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    
+    # Initialize weight values and epochs
+    w1_00, w1_01, w1_10, w1_11 = [], [], [], []
+    w2_00, w2_01 = [], []
+    epochs = []
+    
+    # Extract weights and epochs
+    for i in range(len(w1)):
+        epochs.append(i + 1)
+        w1_00.append(w1[i][0][0])
+        w1_01.append(w1[i][0][1])
+        w1_10.append(w1[i][1][0])
+        w1_11.append(w1[i][1][1])
+        w2_00.append(w2[i][0][0])
+        w2_01.append(w2[i][0][1])
+    
+    # Data dictionaries
+    weights = {"w00": w1_00, "w01": w1_01, "w10": w1_10, "w11": w1_11}
+    weights2 = {"w200": w2_00, "w201": w2_01}
+    
+    # Set a professional style
+    sns.set_theme(style="whitegrid")
+    palette = sns.color_palette("husl", len(weights))  # Distinct colors for Layer 1
+
+    # Plot Layer 1 weights
+    plt.figure(figsize=(10, 6))
+    for i, (weight_name, values) in enumerate(weights.items()):
+        plt.plot(epochs, values, label=weight_name, marker='o', linestyle='-', color=palette[i])
+        
+        # Annotate visible points
+        x_ticks = plt.xticks()[0]  # Current x-axis tick positions
+        visible_indices = [int(tick - 1) for tick in x_ticks if 1 <= tick <= len(values)]
+        for idx in visible_indices:
+            plt.text(
+                epochs[idx], values[idx], f'{values[idx]:.2f}', 
+                fontsize=10, fontweight='bold', color='black', ha='center', va='bottom'
+            )
+    
+    plt.title("Layer 1 Weights Over Time", fontsize=16)
+    plt.xlabel("Epochs", fontsize=14)
+    plt.ylabel("Weight Values", fontsize=14)
+    plt.legend(title="Weights", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.savefig("w1_annotated.jpg", dpi=300)
+    plt.show()
+    plt.close()
+
+    # Plot Layer 2 weights
+    plt.figure(figsize=(10, 6))
+    for i, (weight_name, values) in enumerate(weights2.items()):
+        plt.plot(epochs, values, label=weight_name, marker='s', linestyle='--', color=palette[i])
+        
+        # Annotate visible points
+        x_ticks = plt.xticks()[0]  # Current x-axis tick positions
+        visible_indices = [int(tick - 1) for tick in x_ticks if 1 <= tick <= len(values)]
+        for idx in visible_indices:
+            plt.text(
+                epochs[idx], values[idx], f'{values[idx]:.2f}', 
+                fontsize=10, fontweight='bold', color='black', ha='center', va='bottom'
+            )
+    
+    plt.title("Layer 2 Weights Over Time", fontsize=16)
+    plt.xlabel("Epochs", fontsize=14)
+    plt.ylabel("Weight Values", fontsize=14)
+    plt.legend(title="Weights", fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.savefig("w2_annotated.jpg", dpi=300)
+    plt.show()
+    plt.close()
+
+
+
+
+
+def plotLoss(losses):
+    # Set a professional style
+    sns.set_theme(style="whitegrid")
+    
+    # Plot the loss
+    plt.figure(figsize=(10, 6))
+    epochs = range(1, len(losses) + 1)  # Create epoch range
+    plt.plot(epochs, losses, marker='o', markersize=6, linestyle='-', linewidth=2, color='blue', label="Loss")
+    
+    # Get visible x-axis ticks
+    x_ticks = plt.xticks()[0]  # Current x-axis tick positions
+    visible_indices = [int(tick - 1) for tick in x_ticks if 1 <= tick <= len(losses)]
+    
+    # Annotate data points only at x-axis tick positions
+    for idx in visible_indices:
+        plt.text(
+            epochs[idx], losses[idx], f'{losses[idx]:.2f}', 
+            fontsize=12, fontweight='bold', color='black', ha='center', va='bottom'
+        )
+    
+    # Add grid, labels, and title
+    plt.title("Loss Over Epochs", fontsize=18)
+    plt.xlabel("Epochs", fontsize=14)
+    plt.ylabel("Loss", fontsize=14)
+    plt.legend(fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    
+    # Tight layout and save the plot
+    plt.tight_layout()
+    plt.savefig("MSE_Loss_Visible.jpg", dpi=300, bbox_inches='tight')  # High-quality image
+    plt.show()
+    plt.close()
+
+
 
 if __name__ == "__main__":
     # Generate dataset
@@ -140,16 +243,14 @@ if __name__ == "__main__":
     x_test = test_data[['x1', 'x2']].values
     y_test = test_data['y'].values
 
-    # Train the model
-    w1, b1, w2, b2, losses = train(x_train, y_train, input_size=2, hidden_size=2, output_size=1, epochs=10000, lr=0.05)
+    # train the model
+    w1, b1, w2, b2, losses, w1_arr, w2_arr = train(x_train, y_train, input_size=2, hidden_size=2, output_size=1, epochs=100000, lr=0.05)
 
-    # Plot the loss
-    plt.plot(losses)
-    plt.title("Loss over epochs")
-    plt.xlabel("Epochs")
-    plt.ylabel("Loss")
-    plt.show()
+    #plot loss
+    plotLoss(losses)
 
+    #plot weights
+    plot_weights(w1_arr, w2_arr)
     # Evaluate the model
     accuracy, cm, predictions = evaluate_model(w1, b1, w2, b2, x_test, y_test)
     print(f"Test Accuracy: {accuracy * 100:.2f}%")
